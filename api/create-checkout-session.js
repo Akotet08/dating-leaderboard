@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { getBoostPackage, getRequiredEnv } from "./_payment-config.js";
-import { getSupabaseAdmin } from "./_supabase.js";
+import { createPendingBoostPayment } from "./_db.js";
 
 const stripe = new Stripe(getRequiredEnv("STRIPE_SECRET_KEY"), {
   apiVersion: "2026-05-27.dahlia"
@@ -46,21 +46,15 @@ export default async function handler(request, response) {
       cancel_url: `${origin}/?payment=cancelled`
     });
 
-    const supabase = getSupabaseAdmin();
-    const { error } = await supabase.from("boost_payments").insert({
-      stripe_session_id: session.id,
-      candidate_id: candidateId,
-      candidate_name: String(candidateName ?? ""),
-      boost_id: boost.id,
+    await createPendingBoostPayment({
+      stripeSessionId: session.id,
+      candidateId,
+      candidateName: String(candidateName ?? ""),
+      boostId: boost.id,
       spots: boost.spots,
-      amount_cents: boost.unitAmount,
-      currency: "usd",
-      status: "pending"
+      amountCents: boost.unitAmount,
+      currency: "usd"
     });
-
-    if (error) {
-      throw error;
-    }
 
     return response.status(200).json({ url: session.url });
   } catch (error) {

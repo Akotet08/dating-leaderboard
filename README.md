@@ -1,6 +1,6 @@
 # Dating Leaderboard
 
-A responsive satirical dating ranking app built with React, TypeScript, Vite, Vercel serverless functions, Stripe Checkout, and Supabase.
+A responsive satirical dating ranking app built with React, TypeScript, Vite, Vercel serverless functions, Stripe Checkout, and Postgres.
 
 ## Local Verification
 
@@ -36,16 +36,12 @@ Fill in:
 
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `POSTGRES_URL`
 - `PUBLIC_APP_URL`
 
-The server also accepts Vercel/Supabase integration aliases:
+The payment API uses `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, or `POSTGRES_URL_NON_POOLING`, in that order. It creates the `boost_payments` and `paid_rank_boosts` tables automatically if they are missing.
 
-- `SUPABASE_PUBLICSUPABASE_URL` instead of `SUPABASE_URL`
-- `SUPABASE_SECRET_KEY` instead of `SUPABASE_SERVICE_ROLE_KEY`
-
-Run the SQL in `supabase/schema.sql` inside the Supabase SQL editor.
+You can also run the SQL in `supabase/schema.sql` manually if you want to create the tables ahead of time.
 
 For local payment testing, use Vercel dev so `/api/*` functions are available:
 
@@ -77,4 +73,4 @@ Subscribe it to `checkout.session.completed`.
 - Search and tier filtering
 - Admin add, edit, delete, reset, and mark-as-user tools
 - Stripe Checkout for Nudge, Push, and Launch boost packages
-- Supabase tables for pending and paid boost records
+- Postgres tables for pending and paid boost records

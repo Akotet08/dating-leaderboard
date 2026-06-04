@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { getRequiredEnv } from "./_payment-config.js";
-import { getSupabaseAdmin } from "./_supabase.js";
+import { markBoostPaymentPaid } from "./_db.js";
 
 const stripe = new Stripe(getRequiredEnv("STRIPE_SECRET_KEY"), {
   apiVersion: "2026-05-27.dahlia"
@@ -42,37 +42,19 @@ export default async function handler(request, response) {
 }
 
 async function recordCompletedCheckout(session) {
-  const supabase = getSupabaseAdmin();
   const boostId = session.metadata?.boost_id;
   const candidateId = session.metadata?.candidate_id;
   const candidateName = session.metadata?.candidate_name ?? "";
   const spots = Number(session.metadata?.spots ?? 0);
 
-  const { error: paymentError } = await supabase
-    .from("boost_payments")
-    .update({
-      status: "paid",
-      stripe_payment_intent_id:
-        typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id,
-      paid_at: new Date().toISOString()
-    })
-    .eq("stripe_session_id", session.id);
-
-  if (paymentError) {
-    throw paymentError;
-  }
-
-  const { error: boostError } = await supabase.from("paid_rank_boosts").insert({
-    stripe_session_id: session.id,
-    candidate_id: candidateId,
-    candidate_name: candidateName,
-    boost_id: boostId,
+  await markBoostPaymentPaid({
+    stripeSessionId: session.id,
+    stripePaymentIntentId: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id,
+    candidateId,
+    candidateName,
+    boostId,
     spots
   });
-
-  if (boostError && boostError.code !== "23505") {
-    throw boostError;
-  }
 }
 
 async function readRawBody(request) {
