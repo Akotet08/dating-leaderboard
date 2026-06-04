@@ -3,21 +3,28 @@ import { createRoot } from "react-dom/client";
 import {
   ArrowUpRight,
   BadgeDollarSign,
+  Check,
   Heart,
-  ListFilter,
+  LayoutDashboard,
   Medal,
+  Pencil,
+  Plus,
   RotateCcw,
   Search,
+  Shield,
   Sparkles,
+  Trash2,
   Trophy,
+  Users,
   X
 } from "lucide-react";
 import "./styles.css";
 
 type Tier = "S-Tier" | "A-Tier" | "B-Tier" | "C-Tier";
+type View = "leaderboard" | "admin";
 
 type Candidate = {
-  rank: number;
+  id: string;
   name: string;
   tier: Tier;
   score: number;
@@ -33,9 +40,14 @@ type Boost = {
   price: number;
 };
 
-const candidates: Candidate[] = [
+type CandidateForm = Omit<Candidate, "id">;
+
+const STORAGE_KEY = "dating-leaderboard:candidates";
+const tiers: Tier[] = ["S-Tier", "A-Tier", "B-Tier", "C-Tier"];
+
+const defaultCandidates: Candidate[] = [
   {
-    rank: 1,
+    id: "tyrone",
     name: "Tyrone",
     tier: "S-Tier",
     score: 79,
@@ -43,7 +55,7 @@ const candidates: Candidate[] = [
     delta: "+4"
   },
   {
-    rank: 2,
+    id: "dante",
     name: "Dante",
     tier: "S-Tier",
     score: 76,
@@ -51,7 +63,7 @@ const candidates: Candidate[] = [
     delta: "+2"
   },
   {
-    rank: 3,
+    id: "isaac",
     name: "Isaac",
     tier: "S-Tier",
     score: 72,
@@ -59,7 +71,7 @@ const candidates: Candidate[] = [
     delta: "New"
   },
   {
-    rank: 4,
+    id: "hector",
     name: "Hector",
     tier: "A-Tier",
     score: 68,
@@ -67,7 +79,7 @@ const candidates: Candidate[] = [
     delta: "+1"
   },
   {
-    rank: 5,
+    id: "jordan",
     name: "Jordan",
     tier: "A-Tier",
     score: 64,
@@ -75,7 +87,7 @@ const candidates: Candidate[] = [
     delta: "-1"
   },
   {
-    rank: 6,
+    id: "andre",
     name: "Andre",
     tier: "A-Tier",
     score: 61,
@@ -83,7 +95,7 @@ const candidates: Candidate[] = [
     delta: "+3"
   },
   {
-    rank: 7,
+    id: "marcus",
     name: "Marcus",
     tier: "A-Tier",
     score: 58,
@@ -91,7 +103,7 @@ const candidates: Candidate[] = [
     delta: "-2"
   },
   {
-    rank: 8,
+    id: "caleb",
     name: "Caleb",
     tier: "B-Tier",
     score: 54,
@@ -99,7 +111,7 @@ const candidates: Candidate[] = [
     delta: "+1"
   },
   {
-    rank: 9,
+    id: "nate",
     name: "Nate",
     tier: "B-Tier",
     score: 51,
@@ -107,7 +119,7 @@ const candidates: Candidate[] = [
     delta: "-1"
   },
   {
-    rank: 10,
+    id: "miles",
     name: "Miles",
     tier: "B-Tier",
     score: 48,
@@ -115,7 +127,7 @@ const candidates: Candidate[] = [
     delta: "+2"
   },
   {
-    rank: 11,
+    id: "cole",
     name: "Cole",
     tier: "B-Tier",
     score: 46,
@@ -123,7 +135,7 @@ const candidates: Candidate[] = [
     delta: "-3"
   },
   {
-    rank: 12,
+    id: "jalen",
     name: "Jalen",
     tier: "B-Tier",
     score: 45,
@@ -131,7 +143,7 @@ const candidates: Candidate[] = [
     delta: "0"
   },
   {
-    rank: 13,
+    id: "you",
     name: "You",
     tier: "B-Tier",
     score: 44,
@@ -140,7 +152,7 @@ const candidates: Candidate[] = [
     isUser: true
   },
   {
-    rank: 14,
+    id: "trey",
     name: "Trey",
     tier: "C-Tier",
     score: 38,
@@ -148,7 +160,7 @@ const candidates: Candidate[] = [
     delta: "-4"
   },
   {
-    rank: 15,
+    id: "kendrick",
     name: "Kendrick",
     tier: "C-Tier",
     score: 34,
@@ -157,6 +169,15 @@ const candidates: Candidate[] = [
   }
 ];
 
+const emptyForm: CandidateForm = {
+  name: "",
+  tier: "B-Tier",
+  score: 40,
+  note: "",
+  delta: "",
+  isUser: false
+};
+
 const boosts: Boost[] = [
   { id: "nudge", name: "Nudge", spots: 1, price: 2.99 },
   { id: "push", name: "Push", spots: 3, price: 6.99 },
@@ -164,15 +185,24 @@ const boosts: Boost[] = [
 ];
 
 function App() {
+  const [view, setView] = React.useState<View>("leaderboard");
+  const [candidates, setCandidates] = React.useState<Candidate[]>(() => loadCandidates());
   const [boostOpen, setBoostOpen] = React.useState(false);
   const [selectedBoost, setSelectedBoost] = React.useState<Boost>(boosts[1]);
   const [boosted, setBoosted] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [tier, setTier] = React.useState<"All" | Tier>("All");
 
-  const user = candidates.find((candidate) => candidate.isUser)!;
-  const boostedRank = Math.max(1, user.rank - selectedBoost.spots);
-  const visibleCandidates = candidates.filter((candidate) => {
+  React.useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(candidates));
+  }, [candidates]);
+
+  const rankedCandidates = React.useMemo(() => rankCandidates(candidates), [candidates]);
+  const user = rankedCandidates.find((candidate) => candidate.isUser);
+  const boostedRank = user ? Math.max(1, user.rank - selectedBoost.spots) : 1;
+  const boostedScore = user ? Math.min(80, user.score + selectedBoost.spots * 4) : 0;
+
+  const visibleCandidates = rankedCandidates.filter((candidate) => {
     const matchesQuery = [candidate.name, candidate.note, candidate.tier]
       .join(" ")
       .toLowerCase()
@@ -181,100 +211,109 @@ function App() {
     return matchesQuery && matchesTier;
   });
 
+  const podiumCandidates = rankedCandidates.slice(0, 3);
+  const averageScore =
+    candidates.length === 0
+      ? 0
+      : Math.round(candidates.reduce((sum, candidate) => sum + candidate.score, 0) / candidates.length);
+
   function handleContinue() {
     setBoosted(true);
     setBoostOpen(false);
   }
 
-  function handleReset() {
+  function handleResetBoost() {
     setBoosted(false);
     setSelectedBoost(boosts[1]);
   }
 
+  function handleResetData() {
+    setCandidates(defaultCandidates);
+    setBoosted(false);
+    setSelectedBoost(boosts[1]);
+  }
+
+  function handleSaveCandidate(candidate: CandidateForm, candidateId?: string) {
+    const normalized: Candidate = {
+      ...candidate,
+      id: candidateId ?? createId(candidate.name),
+      score: clampScore(candidate.score),
+      delta: candidate.delta?.trim() || undefined
+    };
+
+    setCandidates((current) => {
+      const withoutUserFlag = normalized.isUser
+        ? current.map((item) => ({ ...item, isUser: item.id === candidateId ? item.isUser : false }))
+        : current;
+
+      if (candidateId) {
+        return withoutUserFlag.map((item) => (item.id === candidateId ? { ...normalized, id: candidateId } : item));
+      }
+
+      return [...withoutUserFlag, normalized];
+    });
+  }
+
+  function handleDeleteCandidate(candidateId: string) {
+    setCandidates((current) => current.filter((candidate) => candidate.id !== candidateId));
+  }
+
   return (
     <main className="app-shell">
-      <section className="hero-panel" aria-labelledby="page-title">
-        <header className="topbar">
-          <div className="brand-mark" aria-hidden="true">
+      <header className="app-header">
+        <div className="brand-lockup">
+          <span className="brand-mark" aria-hidden="true">
             <Heart size={18} fill="currentColor" />
-          </div>
-          <nav className="header-actions" aria-label="Primary">
-            <button className="icon-button" aria-label="Filter rankings">
-              <ListFilter size={18} />
-            </button>
-            <button className="icon-button" aria-label="View trophies">
-              <Trophy size={18} />
-            </button>
-          </nav>
-        </header>
-
-        <div className="title-block">
-          <p>The Official Rankings</p>
-          <h1 id="page-title">Dating Leaderboard</h1>
-          <span>Where everyone stands. Scroll to see all rankings.</span>
-        </div>
-
-        <Podium />
-      </section>
-
-      <section className="control-strip" aria-label="Ranking controls">
-        <label className="search-box">
-          <Search size={17} aria-hidden="true" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search contenders"
-          />
-        </label>
-        <select
-          aria-label="Filter by tier"
-          value={tier}
-          onChange={(event) => setTier(event.target.value as "All" | Tier)}
-        >
-          <option>All</option>
-          <option>S-Tier</option>
-          <option>A-Tier</option>
-          <option>B-Tier</option>
-          <option>C-Tier</option>
-        </select>
-      </section>
-
-      {boosted ? (
-        <section className="boost-result" aria-live="polite">
+          </span>
           <div>
-            <Sparkles size={18} />
-            <span>Rank boosted to #{boostedRank}</span>
+            <p>The Official Rankings</p>
+            <h1>Dating Leaderboard</h1>
           </div>
-          <button onClick={handleReset}>
-            <RotateCcw size={16} />
-            Reset
+        </div>
+
+        <nav className="view-tabs" aria-label="Application views">
+          <button className={view === "leaderboard" ? "active" : ""} onClick={() => setView("leaderboard")}>
+            <Trophy size={17} />
+            Rankings
           </button>
-        </section>
-      ) : null}
+          <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>
+            <Shield size={17} />
+            Admin
+          </button>
+        </nav>
+      </header>
 
-      <section className="rankings" aria-labelledby="rankings-title">
-        <div className="section-heading">
-          <h2 id="rankings-title">Full Rankings</h2>
-          <span>{visibleCandidates.length} contenders</span>
-        </div>
-
-        <div className="ranking-list">
-          {visibleCandidates.map((candidate) => (
-            <RankingRow
-              key={candidate.name}
-              candidate={
-                boosted && candidate.isUser
-                  ? { ...candidate, rank: boostedRank, score: Math.min(80, candidate.score + selectedBoost.spots * 4) }
-                  : candidate
-              }
-              onBoost={() => setBoostOpen(true)}
-              boosted={boosted}
-            />
-          ))}
-        </div>
+      <section className="stats-grid" aria-label="Leaderboard summary">
+        <Metric icon={<Users size={18} />} label="Contenders" value={String(candidates.length)} />
+        <Metric icon={<Medal size={18} />} label="Leader" value={rankedCandidates[0]?.name ?? "None"} />
+        <Metric icon={<Sparkles size={18} />} label="Avg score" value={`${averageScore}/80`} />
       </section>
 
-      {boostOpen ? (
+      {view === "leaderboard" ? (
+        <LeaderboardView
+          candidates={visibleCandidates}
+          podiumCandidates={podiumCandidates}
+          query={query}
+          tier={tier}
+          boosted={boosted}
+          boostedRank={boostedRank}
+          boostedScore={boostedScore}
+          user={user}
+          onQueryChange={setQuery}
+          onTierChange={setTier}
+          onBoost={() => setBoostOpen(true)}
+          onResetBoost={handleResetBoost}
+        />
+      ) : (
+        <AdminView
+          candidates={rankedCandidates}
+          onSave={handleSaveCandidate}
+          onDelete={handleDeleteCandidate}
+          onResetData={handleResetData}
+        />
+      )}
+
+      {boostOpen && user ? (
         <BoostSheet
           boosts={boosts}
           selectedBoost={selectedBoost}
@@ -284,32 +323,320 @@ function App() {
           onContinue={handleContinue}
         />
       ) : null}
-
-      <footer className="bottom-nav" aria-label="App navigation">
-        <button aria-label="Rankings" className="active">
-          <Trophy size={20} />
-        </button>
-        <button aria-label="Boosts">
-          <BadgeDollarSign size={20} />
-        </button>
-        <button aria-label="Matches">
-          <Heart size={20} />
-        </button>
-      </footer>
     </main>
   );
 }
 
-function Podium() {
-  const podium = [candidates[1], candidates[0], candidates[2]];
+function LeaderboardView({
+  candidates,
+  podiumCandidates,
+  query,
+  tier,
+  boosted,
+  boostedRank,
+  boostedScore,
+  user,
+  onQueryChange,
+  onTierChange,
+  onBoost,
+  onResetBoost
+}: {
+  candidates: RankedCandidate[];
+  podiumCandidates: RankedCandidate[];
+  query: string;
+  tier: "All" | Tier;
+  boosted: boolean;
+  boostedRank: number;
+  boostedScore: number;
+  user?: RankedCandidate;
+  onQueryChange: (query: string) => void;
+  onTierChange: (tier: "All" | Tier) => void;
+  onBoost: () => void;
+  onResetBoost: () => void;
+}) {
+  return (
+    <div className="content-grid">
+      <section className="feature-panel" aria-labelledby="feature-title">
+        <div className="title-block">
+          <p>Current board</p>
+          <h2 id="feature-title">Where everyone stands right now.</h2>
+          <span>Search, filter by tier, and boost the active user from the ranking row.</span>
+        </div>
+        <Podium candidates={podiumCandidates} />
+        {boosted && user ? (
+          <section className="boost-result" aria-live="polite">
+            <div>
+              <Sparkles size={18} />
+              <span>
+                {user.name} boosted to #{boostedRank}
+              </span>
+            </div>
+            <button onClick={onResetBoost}>
+              <RotateCcw size={16} />
+              Reset
+            </button>
+          </section>
+        ) : null}
+      </section>
+
+      <section className="rankings" aria-labelledby="rankings-title">
+        <div className="control-strip" aria-label="Ranking controls">
+          <label className="search-box">
+            <Search size={17} aria-hidden="true" />
+            <input
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="Search contenders"
+            />
+          </label>
+          <select
+            aria-label="Filter by tier"
+            value={tier}
+            onChange={(event) => onTierChange(event.target.value as "All" | Tier)}
+          >
+            <option>All</option>
+            {tiers.map((tierName) => (
+              <option key={tierName}>{tierName}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="section-heading">
+          <h2 id="rankings-title">Full Rankings</h2>
+          <span>{candidates.length} shown</span>
+        </div>
+
+        <div className="ranking-list">
+          {candidates.map((candidate) => (
+            <RankingRow
+              key={candidate.id}
+              candidate={
+                boosted && candidate.isUser
+                  ? { ...candidate, rank: boostedRank, score: boostedScore }
+                  : candidate
+              }
+              onBoost={onBoost}
+              boosted={boosted}
+            />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function AdminView({
+  candidates,
+  onSave,
+  onDelete,
+  onResetData
+}: {
+  candidates: RankedCandidate[];
+  onSave: (candidate: CandidateForm, candidateId?: string) => void;
+  onDelete: (candidateId: string) => void;
+  onResetData: () => void;
+}) {
+  const [editingId, setEditingId] = React.useState<string | undefined>();
+  const editingCandidate = candidates.find((candidate) => candidate.id === editingId);
+
+  function handleEdit(candidate: Candidate) {
+    setEditingId(candidate.id);
+  }
+
+  function handleSaved(candidate: CandidateForm) {
+    onSave(candidate, editingId);
+    setEditingId(undefined);
+  }
+
+  return (
+    <div className="admin-grid">
+      <section className="admin-panel" aria-labelledby="admin-title">
+        <div className="section-heading">
+          <div>
+            <h2 id="admin-title">{editingCandidate ? "Edit Contender" : "Add Contender"}</h2>
+            <span>Changes update the leaderboard immediately.</span>
+          </div>
+        </div>
+        <CandidateEditor
+          key={editingCandidate?.id ?? "new-candidate"}
+          candidate={editingCandidate}
+          onSave={handleSaved}
+          onCancel={() => setEditingId(undefined)}
+        />
+      </section>
+
+      <section className="admin-panel" aria-labelledby="admin-list-title">
+        <div className="section-heading">
+          <div>
+            <h2 id="admin-list-title">Manage Records</h2>
+            <span>{candidates.length} saved contenders</span>
+          </div>
+          <button className="secondary-button" onClick={onResetData}>
+            <RotateCcw size={16} />
+            Reset data
+          </button>
+        </div>
+
+        <div className="admin-list">
+          {candidates.map((candidate) => (
+            <article className="admin-row" key={candidate.id}>
+              <div className="rank-number">{candidate.rank}</div>
+              <div className="admin-copy">
+                <div className="candidate-header">
+                  <h3>{candidate.name}</h3>
+                  {candidate.isUser ? <span className="you-badge">User</span> : null}
+                  <span className={`tier tier-${candidate.tier[0].toLowerCase()}`}>{candidate.tier}</span>
+                </div>
+                <p>{candidate.note}</p>
+                <strong>{candidate.score}/80</strong>
+              </div>
+              <div className="row-actions">
+                <button className="icon-button" aria-label={`Edit ${candidate.name}`} onClick={() => handleEdit(candidate)}>
+                  <Pencil size={17} />
+                </button>
+                <button
+                  className="icon-button danger"
+                  aria-label={`Delete ${candidate.name}`}
+                  onClick={() => onDelete(candidate.id)}
+                >
+                  <Trash2 size={17} />
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CandidateEditor({
+  candidate,
+  onSave,
+  onCancel
+}: {
+  candidate?: Candidate;
+  onSave: (candidate: CandidateForm) => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = React.useState<CandidateForm>(
+    candidate
+      ? {
+          name: candidate.name,
+          tier: candidate.tier,
+          score: candidate.score,
+          note: candidate.note,
+          delta: candidate.delta ?? "",
+          isUser: Boolean(candidate.isUser)
+        }
+      : emptyForm
+  );
+
+  const canSave = form.name.trim().length > 0 && form.note.trim().length > 0;
+
+  function updateForm<Key extends keyof CandidateForm>(key: Key, value: CandidateForm[Key]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSave) {
+      return;
+    }
+    onSave({
+      ...form,
+      name: form.name.trim(),
+      note: form.note.trim(),
+      delta: form.delta?.trim()
+    });
+    if (!candidate) {
+      setForm(emptyForm);
+    }
+  }
+
+  return (
+    <form className="candidate-form" onSubmit={handleSubmit}>
+      <label>
+        Name
+        <input value={form.name} onChange={(event) => updateForm("name", event.target.value)} placeholder="New contender" />
+      </label>
+
+      <div className="form-row">
+        <label>
+          Tier
+          <select value={form.tier} onChange={(event) => updateForm("tier", event.target.value as Tier)}>
+            {tiers.map((tierName) => (
+              <option key={tierName}>{tierName}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Score
+          <input
+            type="number"
+            min="0"
+            max="80"
+            value={form.score}
+            onChange={(event) => updateForm("score", Number(event.target.value))}
+          />
+        </label>
+      </div>
+
+      <label>
+        Movement
+        <input value={form.delta ?? ""} onChange={(event) => updateForm("delta", event.target.value)} placeholder="+2, -1, New" />
+      </label>
+
+      <label>
+        Roast note
+        <textarea value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Add the leaderboard note" />
+      </label>
+
+      <label className="checkbox-row">
+        <input type="checkbox" checked={Boolean(form.isUser)} onChange={(event) => updateForm("isUser", event.target.checked)} />
+        Set as boostable user
+      </label>
+
+      <div className="form-actions">
+        {candidate ? (
+          <button className="secondary-button" type="button" onClick={onCancel}>
+            <X size={16} />
+            Cancel
+          </button>
+        ) : null}
+        <button className="primary-button" type="submit" disabled={!canSave}>
+          {candidate ? <Check size={17} /> : <Plus size={17} />}
+          {candidate ? "Save changes" : "Add contender"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <article className="metric-card">
+      <span aria-hidden="true">{icon}</span>
+      <div>
+        <p>{label}</p>
+        <strong>{value}</strong>
+      </div>
+    </article>
+  );
+}
+
+type RankedCandidate = Candidate & { rank: number };
+
+function Podium({ candidates }: { candidates: RankedCandidate[] }) {
+  const podium = [candidates[1], candidates[0], candidates[2]].filter(Boolean);
 
   return (
     <div className="podium" aria-label="Top three rankings">
       {podium.map((candidate) => (
-        <article className={`podium-card rank-${candidate.rank}`} key={candidate.name}>
+        <article className={`podium-card rank-${candidate.rank}`} key={candidate.id}>
           <Medal size={18} aria-hidden="true" />
           <strong>#{candidate.rank}</strong>
-          <h2>{candidate.name}</h2>
+          <h3>{candidate.name}</h3>
           <p>{candidate.tier}</p>
           <span>{candidate.score}/80</span>
         </article>
@@ -323,7 +650,7 @@ function RankingRow({
   onBoost,
   boosted
 }: {
-  candidate: Candidate;
+  candidate: RankedCandidate;
   onBoost: () => void;
   boosted: boolean;
 }) {
@@ -340,7 +667,7 @@ function RankingRow({
         {candidate.isUser ? (
           <button className="boost-button" onClick={onBoost} disabled={boosted}>
             <span>{boosted ? "Boost Applied" : "Boost Your Rank"}</span>
-            <small>{boosted ? `now #${candidate.rank}` : "from #13"}</small>
+            <small>{boosted ? `now #${candidate.rank}` : `from #${candidate.rank}`}</small>
             <ArrowUpRight size={18} />
           </button>
         ) : null}
@@ -411,6 +738,41 @@ function BoostSheet({
       </section>
     </div>
   );
+}
+
+function rankCandidates(candidates: Candidate[]): RankedCandidate[] {
+  return [...candidates]
+    .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name))
+    .map((candidate, index) => ({ ...candidate, rank: index + 1 }));
+}
+
+function loadCandidates() {
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (!stored) {
+      return defaultCandidates;
+    }
+    const parsed = JSON.parse(stored) as Candidate[];
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultCandidates;
+  } catch {
+    return defaultCandidates;
+  }
+}
+
+function createId(name: string) {
+  const base = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${base || "contender"}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function clampScore(score: number) {
+  if (Number.isNaN(score)) {
+    return 0;
+  }
+  return Math.min(80, Math.max(0, Math.round(score)));
 }
 
 createRoot(document.getElementById("root")!).render(
