@@ -16,7 +16,7 @@ Check syntax, TypeScript, and production bundling:
 npm run build
 ```
 
-Run locally:
+Run the frontend only:
 
 ```bash
 npm run dev
@@ -24,7 +24,13 @@ npm run dev
 
 Then open the local URL Vite prints, usually `http://127.0.0.1:5173/`.
 
-## Stripe and Supabase Setup
+For auth, database APIs, and Stripe checkout, run through Vercel dev instead:
+
+```bash
+npx vercel dev
+```
+
+## App Setup
 
 Create a local env file:
 
@@ -38,18 +44,19 @@ Fill in:
 - `STRIPE_WEBHOOK_SECRET`
 - `POSTGRES_URL`
 - `PUBLIC_APP_URL`
+- `SESSION_SECRET`
+- `ADMIN_DEFAULT_PASSWORD`
 
-The payment API uses `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, or `POSTGRES_URL_NON_POOLING`, in that order. It creates the `boost_payments` and `paid_rank_boosts` tables automatically if they are missing.
+The API uses `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, or `POSTGRES_URL_NON_POOLING`, in that order. It creates the auth, leaderboard, boost payment, and paid boost tables automatically if they are missing.
 
-You can also run the SQL in `supabase/schema.sql` manually if you want to create the tables ahead of time.
+The first API call seeds one admin account:
 
-For local payment testing, use Vercel dev so `/api/*` functions are available:
+- name: `Deme`
+- default password: `Deme_looking_for_the_one`
 
-```bash
-npx vercel dev
-```
+The password is stored only as a hash and can be changed after login.
 
-In another terminal, forward Stripe webhooks:
+For local payment testing, forward Stripe webhooks in another terminal:
 
 ```bash
 stripe listen --forward-to http://localhost:3000/api/stripe-webhook
@@ -69,8 +76,12 @@ Subscribe it to `checkout.session.completed`.
 
 - Top-three podium
 - Full ranked contender list
-- Current-user highlighted row
+- Public leaderboard viewing
+- User registration with name, pickup line, and password
+- Single seeded admin login for `Deme`
+- Change password flow for logged-in accounts
+- Admin add, edit, rate, and delete user records
+- Registered users start at the bottom of the leaderboard
 - Search and tier filtering
-- Admin add, edit, delete, reset, and mark-as-user tools
 - Stripe Checkout for Nudge, Push, and Launch boost packages
-- Postgres tables for pending and paid boost records
+- Postgres tables for users, leaderboard records, pending boosts, and paid boost records

@@ -5,7 +5,9 @@ import {
   BadgeDollarSign,
   Check,
   Heart,
-  LayoutDashboard,
+  KeyRound,
+  LogIn,
+  LogOut,
   Medal,
   Pencil,
   Plus,
@@ -15,6 +17,7 @@ import {
   Sparkles,
   Trash2,
   Trophy,
+  UserPlus,
   Users,
   X
 } from "lucide-react";
@@ -22,15 +25,26 @@ import "./styles.css";
 
 type Tier = "S-Tier" | "A-Tier" | "B-Tier" | "C-Tier";
 type View = "leaderboard" | "admin";
+type AuthMode = "login" | "register";
 
 type Candidate = {
   id: string;
   name: string;
+  pickupLine?: string | null;
   tier: Tier;
   score: number;
   note: string;
   delta?: string;
   isUser?: boolean;
+  hasLogin?: boolean;
+};
+
+type AuthUser = {
+  id: string;
+  name: string;
+  role: "admin" | "user";
+  pickupLine?: string | null;
+  hasLogin: boolean;
 };
 
 type Boost = {
@@ -40,142 +54,19 @@ type Boost = {
   price: number;
 };
 
-type CandidateForm = Omit<Candidate, "id">;
+type CandidateForm = Omit<Candidate, "id" | "hasLogin"> & { password?: string };
+type RankedCandidate = Candidate & { rank: number };
 
-const STORAGE_KEY = "dating-leaderboard:candidates";
 const tiers: Tier[] = ["S-Tier", "A-Tier", "B-Tier", "C-Tier"];
-
-const defaultCandidates: Candidate[] = [
-  {
-    id: "tyrone",
-    name: "Tyrone",
-    tier: "S-Tier",
-    score: 79,
-    note: "Remembers every detail you mention and still shows up 10 minutes early.",
-    delta: "+4"
-  },
-  {
-    id: "dante",
-    name: "Dante",
-    tier: "S-Tier",
-    score: 76,
-    note: "Main-character energy, replies in under 3 minutes, and has a 5-year plan.",
-    delta: "+2"
-  },
-  {
-    id: "isaac",
-    name: "Isaac",
-    tier: "S-Tier",
-    score: 72,
-    note: "Asked one thoughtful question and accidentally cleared the field.",
-    delta: "New"
-  },
-  {
-    id: "hector",
-    name: "Hector",
-    tier: "A-Tier",
-    score: 68,
-    note: "Brings flowers without making it a personality reveal.",
-    delta: "+1"
-  },
-  {
-    id: "jordan",
-    name: "Jordan",
-    tier: "A-Tier",
-    score: 64,
-    note: "Great dinner pick. Suspiciously vague about his weekday schedule.",
-    delta: "-1"
-  },
-  {
-    id: "andre",
-    name: "Andre",
-    tier: "A-Tier",
-    score: 61,
-    note: "Sent a voice note that was somehow charming and under 20 seconds.",
-    delta: "+3"
-  },
-  {
-    id: "marcus",
-    name: "Marcus",
-    tier: "A-Tier",
-    score: 58,
-    note: "Reliable, kind, and still recovering from the group chat audit.",
-    delta: "-2"
-  },
-  {
-    id: "caleb",
-    name: "Caleb",
-    tier: "B-Tier",
-    score: 54,
-    note: "Has potential if the phrase 'let's play it by ear' is retired.",
-    delta: "+1"
-  },
-  {
-    id: "nate",
-    name: "Nate",
-    tier: "B-Tier",
-    score: 51,
-    note: "Good vibes, solid intentions, still working on the follow-through.",
-    delta: "-1"
-  },
-  {
-    id: "miles",
-    name: "Miles",
-    tier: "B-Tier",
-    score: 48,
-    note: "Sweet and spontaneous - just needs to answer texts before 11 PM.",
-    delta: "+2"
-  },
-  {
-    id: "cole",
-    name: "Cole",
-    tier: "B-Tier",
-    score: 46,
-    note: "Looks great on paper. The paper is a parking ticket.",
-    delta: "-3"
-  },
-  {
-    id: "jalen",
-    name: "Jalen",
-    tier: "B-Tier",
-    score: 45,
-    note: "Nice guy. Took 48 hours to confirm dinner plans.",
-    delta: "0"
-  },
-  {
-    id: "you",
-    name: "You",
-    tier: "B-Tier",
-    score: 44,
-    note: "You have potential - real potential - but 'I'm bad at texting' is not a personality trait.",
-    delta: "You",
-    isUser: true
-  },
-  {
-    id: "trey",
-    name: "Trey",
-    tier: "C-Tier",
-    score: 38,
-    note: "Keeps cancelling plans because of a 'work thing.' That thing is a PS5.",
-    delta: "-4"
-  },
-  {
-    id: "kendrick",
-    name: "Kendrick",
-    tier: "C-Tier",
-    score: 34,
-    note: "Emotionally available once a month, around the new moon, if conditions are right.",
-    delta: "-1"
-  }
-];
-
 const emptyForm: CandidateForm = {
   name: "",
-  tier: "B-Tier",
-  score: 40,
+  pickupLine: "",
+  tier: "C-Tier",
+  score: 0,
   note: "",
-  delta: "",
-  isUser: false
+  delta: "New",
+  isUser: false,
+  password: ""
 };
 
 const boosts: Boost[] = [
@@ -186,7 +77,11 @@ const boosts: Boost[] = [
 
 function App() {
   const [view, setView] = React.useState<View>("leaderboard");
-  const [candidates, setCandidates] = React.useState<Candidate[]>(() => loadCandidates());
+  const [authMode, setAuthMode] = React.useState<AuthMode>("login");
+  const [currentUser, setCurrentUser] = React.useState<AuthUser | null>(null);
+  const [candidates, setCandidates] = React.useState<Candidate[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [notice, setNotice] = React.useState<string | null>(null);
   const [boostOpen, setBoostOpen] = React.useState(false);
   const [selectedBoost, setSelectedBoost] = React.useState<Boost>(boosts[1]);
   const [boosted, setBoosted] = React.useState(false);
@@ -195,33 +90,32 @@ function App() {
   const [query, setQuery] = React.useState("");
   const [tier, setTier] = React.useState<"All" | Tier>("All");
 
+  const isAdmin = currentUser?.role === "admin";
+
   React.useEffect(() => {
+    void loadInitialData();
+
     const params = new URLSearchParams(window.location.search);
     const payment = params.get("payment");
-
     if (payment === "success") {
       setBoosted(true);
       setPaymentNotice("Payment confirmed. Boost applied locally while the webhook records it.");
       window.history.replaceState({}, "", window.location.pathname);
     }
-
     if (payment === "cancelled") {
       setPaymentNotice("Checkout cancelled. No boost was applied.");
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
 
-  React.useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(candidates));
-  }, [candidates]);
-
   const rankedCandidates = React.useMemo(() => rankCandidates(candidates), [candidates]);
-  const user = rankedCandidates.find((candidate) => candidate.isUser);
-  const boostedRank = user ? Math.max(1, user.rank - selectedBoost.spots) : 1;
-  const boostedScore = user ? Math.min(80, user.score + selectedBoost.spots * 4) : 0;
+  const userCandidate = rankedCandidates.find((candidate) => candidate.id === currentUser?.id);
+  const boostableCandidate = userCandidate ?? rankedCandidates.find((candidate) => candidate.isUser);
+  const boostedRank = boostableCandidate ? Math.max(1, boostableCandidate.rank - selectedBoost.spots) : 1;
+  const boostedScore = boostableCandidate ? Math.min(80, boostableCandidate.score + selectedBoost.spots * 4) : 0;
 
   const visibleCandidates = rankedCandidates.filter((candidate) => {
-    const matchesQuery = [candidate.name, candidate.note, candidate.tier]
+    const matchesQuery = [candidate.name, candidate.note, candidate.pickupLine, candidate.tier]
       .join(" ")
       .toLowerCase()
       .includes(query.toLowerCase());
@@ -235,8 +129,55 @@ function App() {
       ? 0
       : Math.round(candidates.reduce((sum, candidate) => sum + candidate.score, 0) / candidates.length);
 
+  async function loadInitialData() {
+    setLoading(true);
+    try {
+      const [me, leaderboard] = await Promise.all([
+        api<{ user: AuthUser | null }>("/api/auth-me"),
+        api<{ candidates: Candidate[] }>("/api/candidates")
+      ]);
+      setCurrentUser(me.user);
+      setCandidates(leaderboard.candidates);
+    } catch (error) {
+      setNotice(readError(error, "Unable to load app data"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function reloadCandidates() {
+    const payload = await api<{ candidates: Candidate[] }>("/api/candidates");
+    setCandidates(payload.candidates);
+  }
+
+  async function handleAuthSubmit(payload: { name: string; password: string; pickupLine?: string }) {
+    const endpoint = authMode === "login" ? "/api/login" : "/api/register";
+    const result = await api<{ user: AuthUser }>(endpoint, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    setCurrentUser(result.user);
+    setNotice(authMode === "login" ? `Logged in as ${result.user.name}.` : "Registration complete. You are on the board.");
+    await reloadCandidates();
+  }
+
+  async function handleLogout() {
+    await api("/api/logout", { method: "POST" });
+    setCurrentUser(null);
+    setView("leaderboard");
+    setNotice("Logged out.");
+  }
+
+  async function handlePasswordChange(currentPassword: string, newPassword: string) {
+    await api("/api/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    setNotice("Password updated.");
+  }
+
   async function handleContinue() {
-    if (!user) {
+    if (!boostableCandidate) {
       return;
     }
 
@@ -246,25 +187,20 @@ function App() {
     try {
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           boostId: selectedBoost.id,
-          candidateId: user.id,
-          candidateName: user.name
+          candidateId: boostableCandidate.id,
+          candidateName: boostableCandidate.name
         })
       });
-
       const payload = (await response.json()) as { url?: string; error?: string };
-
       if (!response.ok || !payload.url) {
         throw new Error(payload.error ?? "Checkout failed");
       }
-
       window.location.assign(payload.url);
     } catch (error) {
-      setPaymentNotice("Checkout is not configured yet. Add Stripe and Supabase env vars, then try again.");
+      setPaymentNotice("Checkout is not configured yet. Add Stripe and database env vars, then try again.");
       console.error(error);
     } finally {
       setCheckoutLoading(false);
@@ -276,35 +212,27 @@ function App() {
     setSelectedBoost(boosts[1]);
   }
 
-  function handleResetData() {
-    setCandidates(defaultCandidates);
-    setBoosted(false);
-    setSelectedBoost(boosts[1]);
-  }
-
-  function handleSaveCandidate(candidate: CandidateForm, candidateId?: string) {
-    const normalized: Candidate = {
+  async function handleSaveCandidate(candidate: CandidateForm, candidateId?: string) {
+    const normalized = {
       ...candidate,
-      id: candidateId ?? createId(candidate.name),
       score: clampScore(candidate.score),
       delta: candidate.delta?.trim() || undefined
     };
-
-    setCandidates((current) => {
-      const withoutUserFlag = normalized.isUser
-        ? current.map((item) => ({ ...item, isUser: item.id === candidateId ? item.isUser : false }))
-        : current;
-
-      if (candidateId) {
-        return withoutUserFlag.map((item) => (item.id === candidateId ? { ...normalized, id: candidateId } : item));
-      }
-
-      return [...withoutUserFlag, normalized];
+    const result = await api<{ candidates: Candidate[] }>("/api/candidates", {
+      method: candidateId ? "PUT" : "POST",
+      body: JSON.stringify(candidateId ? { ...normalized, id: candidateId } : normalized)
     });
+    setCandidates(result.candidates);
+    setNotice(candidateId ? "User rating updated." : "User added.");
   }
 
-  function handleDeleteCandidate(candidateId: string) {
-    setCandidates((current) => current.filter((candidate) => candidate.id !== candidateId));
+  async function handleDeleteCandidate(candidateId: string) {
+    const result = await api<{ candidates: Candidate[] }>("/api/candidates", {
+      method: "DELETE",
+      body: JSON.stringify({ id: candidateId })
+    });
+    setCandidates(result.candidates);
+    setNotice("User removed.");
   }
 
   return (
@@ -325,10 +253,12 @@ function App() {
             <Trophy size={17} />
             Rankings
           </button>
-          <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>
-            <Shield size={17} />
-            Admin
-          </button>
+          {isAdmin ? (
+            <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}>
+              <Shield size={17} />
+              Admin
+            </button>
+          ) : null}
         </nav>
       </header>
 
@@ -338,7 +268,31 @@ function App() {
         <Metric icon={<Sparkles size={18} />} label="Avg score" value={`${averageScore}/80`} />
       </section>
 
-      {view === "leaderboard" ? (
+      {notice ? (
+        <section className="payment-notice" aria-live="polite">
+          <Sparkles size={18} />
+          <span>{notice}</span>
+        </section>
+      ) : null}
+
+      <section className="account-panel" aria-label="Account">
+        {currentUser ? (
+          <AccountSummary user={currentUser} candidate={userCandidate} onLogout={handleLogout} onPasswordChange={handlePasswordChange} />
+        ) : (
+          <AuthPanel mode={authMode} onModeChange={setAuthMode} onSubmit={handleAuthSubmit} />
+        )}
+      </section>
+
+      {loading ? (
+        <section className="rankings">
+          <div className="section-heading">
+            <h2>Loading</h2>
+            <span>Fetching leaderboard</span>
+          </div>
+        </section>
+      ) : view === "admin" && isAdmin ? (
+        <AdminView candidates={rankedCandidates} onSave={handleSaveCandidate} onDelete={handleDeleteCandidate} />
+      ) : (
         <LeaderboardView
           candidates={visibleCandidates}
           podiumCandidates={podiumCandidates}
@@ -347,27 +301,21 @@ function App() {
           boosted={boosted}
           boostedRank={boostedRank}
           boostedScore={boostedScore}
-          user={user}
+          user={boostableCandidate}
+          canBoost={Boolean(currentUser && currentUser.role === "user")}
           onQueryChange={setQuery}
           onTierChange={setTier}
           onBoost={() => setBoostOpen(true)}
           onResetBoost={handleResetBoost}
           paymentNotice={paymentNotice}
         />
-      ) : (
-        <AdminView
-          candidates={rankedCandidates}
-          onSave={handleSaveCandidate}
-          onDelete={handleDeleteCandidate}
-          onResetData={handleResetData}
-        />
       )}
 
-      {boostOpen && user ? (
+      {boostOpen && boostableCandidate ? (
         <BoostSheet
           boosts={boosts}
           selectedBoost={selectedBoost}
-          userRank={user.rank}
+          userRank={boostableCandidate.rank}
           loading={checkoutLoading}
           onSelect={setSelectedBoost}
           onClose={() => setBoostOpen(false)}
@@ -375,6 +323,143 @@ function App() {
         />
       ) : null}
     </main>
+  );
+}
+
+function AuthPanel({
+  mode,
+  onModeChange,
+  onSubmit
+}: {
+  mode: AuthMode;
+  onModeChange: (mode: AuthMode) => void;
+  onSubmit: (payload: { name: string; password: string; pickupLine?: string }) => Promise<void>;
+}) {
+  const [name, setName] = React.useState("");
+  const [pickupLine, setPickupLine] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      await onSubmit({ name, pickupLine, password });
+      setName("");
+      setPickupLine("");
+      setPassword("");
+    } catch (submitError) {
+      setError(readError(submitError, "Unable to authenticate"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form className="auth-form" onSubmit={handleSubmit}>
+      <div className="section-heading">
+        <div>
+          <h2>{mode === "login" ? "Login" : "Register"}</h2>
+          <span>{mode === "login" ? "Deme can access admin after login." : "New users start at the bottom."}</span>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => onModeChange(mode === "login" ? "register" : "login")}>
+          {mode === "login" ? <UserPlus size={16} /> : <LogIn size={16} />}
+          {mode === "login" ? "Register" : "Login"}
+        </button>
+      </div>
+      <div className="form-row">
+        <label>
+          Name
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder={mode === "login" ? "Deme" : "Your name"} />
+        </label>
+        <label>
+          Password
+          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" />
+        </label>
+      </div>
+      {mode === "register" ? (
+        <label>
+          Pickup line
+          <input value={pickupLine} onChange={(event) => setPickupLine(event.target.value)} placeholder="Your best opener" />
+        </label>
+      ) : null}
+      {error ? <p className="form-error">{error}</p> : null}
+      <div className="form-actions">
+        <button className="primary-button" type="submit" disabled={loading}>
+          {mode === "login" ? <LogIn size={17} /> : <UserPlus size={17} />}
+          {loading ? "Working..." : mode === "login" ? "Login" : "Create account"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function AccountSummary({
+  user,
+  candidate,
+  onLogout,
+  onPasswordChange
+}: {
+  user: AuthUser;
+  candidate?: RankedCandidate;
+  onLogout: () => Promise<void>;
+  onPasswordChange: (currentPassword: string, newPassword: string) => Promise<void>;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [currentPassword, setCurrentPassword] = React.useState("");
+  const [newPassword, setNewPassword] = React.useState("");
+  const [message, setMessage] = React.useState<string | null>(null);
+
+  async function handlePasswordSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage(null);
+    try {
+      await onPasswordChange(currentPassword, newPassword);
+      setCurrentPassword("");
+      setNewPassword("");
+      setMessage("Password changed.");
+    } catch (error) {
+      setMessage(readError(error, "Unable to change password"));
+    }
+  }
+
+  return (
+    <div className="account-summary">
+      <div>
+        <p>{user.role === "admin" ? "Admin" : "Signed in"}</p>
+        <h2>{user.name}</h2>
+        {candidate ? <span>Rank #{candidate.rank} · {candidate.score}/80</span> : <span>Admin dashboard access</span>}
+      </div>
+      <div className="account-actions">
+        <button className="secondary-button" onClick={() => setOpen((value) => !value)}>
+          <KeyRound size={16} />
+          Password
+        </button>
+        <button className="secondary-button" onClick={onLogout}>
+          <LogOut size={16} />
+          Logout
+        </button>
+      </div>
+      {open ? (
+        <form className="password-form" onSubmit={handlePasswordSubmit}>
+          <label>
+            Current password
+            <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+          </label>
+          <label>
+            New password
+            <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+          </label>
+          <button className="primary-button" type="submit">
+            <Check size={16} />
+            Save password
+          </button>
+          {message ? <p className="form-error">{message}</p> : null}
+        </form>
+      ) : null}
+    </div>
   );
 }
 
@@ -387,6 +472,7 @@ function LeaderboardView({
   boostedRank,
   boostedScore,
   user,
+  canBoost,
   onQueryChange,
   onTierChange,
   onBoost,
@@ -401,6 +487,7 @@ function LeaderboardView({
   boostedRank: number;
   boostedScore: number;
   user?: RankedCandidate;
+  canBoost: boolean;
   onQueryChange: (query: string) => void;
   onTierChange: (tier: "All" | Tier) => void;
   onBoost: () => void;
@@ -413,16 +500,14 @@ function LeaderboardView({
         <div className="title-block">
           <p>Current board</p>
           <h2 id="feature-title">Where everyone stands right now.</h2>
-          <span>Search, filter by tier, and boost the active user from the ranking row.</span>
+          <span>Register to join the board. Admin ratings decide the official rank.</span>
         </div>
         <Podium candidates={podiumCandidates} />
         {boosted && user ? (
           <section className="boost-result" aria-live="polite">
             <div>
               <Sparkles size={18} />
-              <span>
-                {user.name} boosted to #{boostedRank}
-              </span>
+              <span>{user.name} boosted to #{boostedRank}</span>
             </div>
             <button onClick={onResetBoost}>
               <RotateCcw size={16} />
@@ -442,17 +527,9 @@ function LeaderboardView({
         <div className="control-strip" aria-label="Ranking controls">
           <label className="search-box">
             <Search size={17} aria-hidden="true" />
-            <input
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Search contenders"
-            />
+            <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search contenders" />
           </label>
-          <select
-            aria-label="Filter by tier"
-            value={tier}
-            onChange={(event) => onTierChange(event.target.value as "All" | Tier)}
-          >
+          <select aria-label="Filter by tier" value={tier} onChange={(event) => onTierChange(event.target.value as "All" | Tier)}>
             <option>All</option>
             {tiers.map((tierName) => (
               <option key={tierName}>{tierName}</option>
@@ -469,13 +546,10 @@ function LeaderboardView({
           {candidates.map((candidate) => (
             <RankingRow
               key={candidate.id}
-              candidate={
-                boosted && candidate.isUser
-                  ? { ...candidate, rank: boostedRank, score: boostedScore }
-                  : candidate
-              }
+              candidate={boosted && user?.id === candidate.id ? { ...candidate, rank: boostedRank, score: boostedScore } : candidate}
               onBoost={onBoost}
               boosted={boosted}
+              canBoost={canBoost && user?.id === candidate.id}
             />
           ))}
         </div>
@@ -487,24 +561,33 @@ function LeaderboardView({
 function AdminView({
   candidates,
   onSave,
-  onDelete,
-  onResetData
+  onDelete
 }: {
   candidates: RankedCandidate[];
-  onSave: (candidate: CandidateForm, candidateId?: string) => void;
-  onDelete: (candidateId: string) => void;
-  onResetData: () => void;
+  onSave: (candidate: CandidateForm, candidateId?: string) => Promise<void>;
+  onDelete: (candidateId: string) => Promise<void>;
 }) {
   const [editingId, setEditingId] = React.useState<string | undefined>();
+  const [error, setError] = React.useState<string | null>(null);
   const editingCandidate = candidates.find((candidate) => candidate.id === editingId);
 
-  function handleEdit(candidate: Candidate) {
-    setEditingId(candidate.id);
+  async function handleSaved(candidate: CandidateForm) {
+    setError(null);
+    try {
+      await onSave(candidate, editingId);
+      setEditingId(undefined);
+    } catch (saveError) {
+      setError(readError(saveError, "Unable to save user"));
+    }
   }
 
-  function handleSaved(candidate: CandidateForm) {
-    onSave(candidate, editingId);
-    setEditingId(undefined);
+  async function handleDelete(candidateId: string) {
+    setError(null);
+    try {
+      await onDelete(candidateId);
+    } catch (deleteError) {
+      setError(readError(deleteError, "Unable to delete user"));
+    }
   }
 
   return (
@@ -512,8 +595,8 @@ function AdminView({
       <section className="admin-panel" aria-labelledby="admin-title">
         <div className="section-heading">
           <div>
-            <h2 id="admin-title">{editingCandidate ? "Edit Contender" : "Add Contender"}</h2>
-            <span>Changes update the leaderboard immediately.</span>
+            <h2 id="admin-title">{editingCandidate ? "Rate User" : "Add User"}</h2>
+            <span>Admin ratings update the leaderboard immediately.</span>
           </div>
         </div>
         <CandidateEditor
@@ -522,18 +605,15 @@ function AdminView({
           onSave={handleSaved}
           onCancel={() => setEditingId(undefined)}
         />
+        {error ? <p className="form-error">{error}</p> : null}
       </section>
 
       <section className="admin-panel" aria-labelledby="admin-list-title">
         <div className="section-heading">
           <div>
-            <h2 id="admin-list-title">Manage Records</h2>
-            <span>{candidates.length} saved contenders</span>
+            <h2 id="admin-list-title">Manage Users</h2>
+            <span>{candidates.length} registered and listed users</span>
           </div>
-          <button className="secondary-button" onClick={onResetData}>
-            <RotateCcw size={16} />
-            Reset data
-          </button>
         </div>
 
         <div className="admin-list">
@@ -543,21 +623,18 @@ function AdminView({
               <div className="admin-copy">
                 <div className="candidate-header">
                   <h3>{candidate.name}</h3>
-                  {candidate.isUser ? <span className="you-badge">User</span> : null}
+                  {candidate.hasLogin ? <span className="you-badge">Login</span> : null}
                   <span className={`tier tier-${candidate.tier[0].toLowerCase()}`}>{candidate.tier}</span>
                 </div>
+                {candidate.pickupLine ? <p>{candidate.pickupLine}</p> : null}
                 <p>{candidate.note}</p>
                 <strong>{candidate.score}/80</strong>
               </div>
               <div className="row-actions">
-                <button className="icon-button" aria-label={`Edit ${candidate.name}`} onClick={() => handleEdit(candidate)}>
+                <button className="icon-button" aria-label={`Edit ${candidate.name}`} onClick={() => setEditingId(candidate.id)}>
                   <Pencil size={17} />
                 </button>
-                <button
-                  className="icon-button danger"
-                  aria-label={`Delete ${candidate.name}`}
-                  onClick={() => onDelete(candidate.id)}
-                >
+                <button className="icon-button danger" aria-label={`Delete ${candidate.name}`} onClick={() => void handleDelete(candidate.id)}>
                   <Trash2 size={17} />
                 </button>
               </div>
@@ -575,41 +652,51 @@ function CandidateEditor({
   onCancel
 }: {
   candidate?: Candidate;
-  onSave: (candidate: CandidateForm) => void;
+  onSave: (candidate: CandidateForm) => Promise<void>;
   onCancel: () => void;
 }) {
   const [form, setForm] = React.useState<CandidateForm>(
     candidate
       ? {
           name: candidate.name,
+          pickupLine: candidate.pickupLine ?? "",
           tier: candidate.tier,
           score: candidate.score,
           note: candidate.note,
           delta: candidate.delta ?? "",
-          isUser: Boolean(candidate.isUser)
+          isUser: Boolean(candidate.isUser),
+          password: ""
         }
       : emptyForm
   );
-
+  const [saving, setSaving] = React.useState(false);
   const canSave = form.name.trim().length > 0 && form.note.trim().length > 0;
 
   function updateForm<Key extends keyof CandidateForm>(key: Key, value: CandidateForm[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSave) {
       return;
     }
-    onSave({
-      ...form,
-      name: form.name.trim(),
-      note: form.note.trim(),
-      delta: form.delta?.trim()
-    });
-    if (!candidate) {
-      setForm(emptyForm);
+
+    setSaving(true);
+    try {
+      await onSave({
+        ...form,
+        name: form.name.trim(),
+        pickupLine: form.pickupLine?.trim(),
+        note: form.note.trim(),
+        delta: form.delta?.trim(),
+        password: candidate ? "" : form.password?.trim()
+      });
+      if (!candidate) {
+        setForm(emptyForm);
+      }
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -617,7 +704,12 @@ function CandidateEditor({
     <form className="candidate-form" onSubmit={handleSubmit}>
       <label>
         Name
-        <input value={form.name} onChange={(event) => updateForm("name", event.target.value)} placeholder="New contender" />
+        <input value={form.name} onChange={(event) => updateForm("name", event.target.value)} placeholder="New user" />
+      </label>
+
+      <label>
+        Pickup line
+        <input value={form.pickupLine ?? ""} onChange={(event) => updateForm("pickupLine", event.target.value)} placeholder="Their opener" />
       </label>
 
       <div className="form-row">
@@ -641,19 +733,31 @@ function CandidateEditor({
         </label>
       </div>
 
+      {!candidate ? (
+        <label>
+          Login password
+          <input
+            type="password"
+            value={form.password ?? ""}
+            onChange={(event) => updateForm("password", event.target.value)}
+            placeholder="Optional for admin-added users"
+          />
+        </label>
+      ) : null}
+
       <label>
         Movement
         <input value={form.delta ?? ""} onChange={(event) => updateForm("delta", event.target.value)} placeholder="+2, -1, New" />
       </label>
 
       <label>
-        Roast note
-        <textarea value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Add the leaderboard note" />
+        Leaderboard note
+        <textarea value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Add the rating note" />
       </label>
 
       <label className="checkbox-row">
         <input type="checkbox" checked={Boolean(form.isUser)} onChange={(event) => updateForm("isUser", event.target.checked)} />
-        Set as boostable user
+        Set as boostable fallback user
       </label>
 
       <div className="form-actions">
@@ -663,9 +767,9 @@ function CandidateEditor({
             Cancel
           </button>
         ) : null}
-        <button className="primary-button" type="submit" disabled={!canSave}>
+        <button className="primary-button" type="submit" disabled={!canSave || saving}>
           {candidate ? <Check size={17} /> : <Plus size={17} />}
-          {candidate ? "Save changes" : "Add contender"}
+          {saving ? "Saving..." : candidate ? "Save rating" : "Add user"}
         </button>
       </div>
     </form>
@@ -683,8 +787,6 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
     </article>
   );
 }
-
-type RankedCandidate = Candidate & { rank: number };
 
 function Podium({ candidates }: { candidates: RankedCandidate[] }) {
   const podium = [candidates[1], candidates[0], candidates[2]].filter(Boolean);
@@ -707,23 +809,26 @@ function Podium({ candidates }: { candidates: RankedCandidate[] }) {
 function RankingRow({
   candidate,
   onBoost,
-  boosted
+  boosted,
+  canBoost
 }: {
   candidate: RankedCandidate;
   onBoost: () => void;
   boosted: boolean;
+  canBoost: boolean;
 }) {
   return (
-    <article className={`ranking-row ${candidate.isUser ? "is-user" : ""}`}>
+    <article className={`ranking-row ${canBoost ? "is-user" : ""}`}>
       <div className="rank-number">{candidate.rank}</div>
       <div className="candidate-copy">
         <div className="candidate-header">
           <h3>{candidate.name}</h3>
-          {candidate.isUser ? <span className="you-badge">You</span> : null}
+          {canBoost ? <span className="you-badge">You</span> : null}
           {candidate.delta ? <span className="movement">{candidate.delta}</span> : null}
         </div>
+        {candidate.pickupLine ? <p>{candidate.pickupLine}</p> : null}
         <p>{candidate.note}</p>
-        {candidate.isUser ? (
+        {canBoost ? (
           <button className="boost-button" onClick={onBoost} disabled={boosted}>
             <span>{boosted ? "Boost Applied" : "Boost Your Rank"}</span>
             <small>{boosted ? `now #${candidate.rank}` : `from #${candidate.rank}`}</small>
@@ -777,11 +882,7 @@ function BoostSheet({
             const newRank = Math.max(1, userRank - boost.spots);
             const selected = selectedBoost.id === boost.id;
             return (
-              <button
-                className={`boost-option ${selected ? "selected" : ""}`}
-                key={boost.id}
-                onClick={() => onSelect(boost)}
-              >
+              <button className={`boost-option ${selected ? "selected" : ""}`} key={boost.id} onClick={() => onSelect(boost)}>
                 <span>
                   <strong>{boost.name}</strong>
                   <small>
@@ -801,32 +902,27 @@ function BoostSheet({
   );
 }
 
+async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init.headers ?? {})
+    }
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Request failed");
+  }
+
+  return payload as T;
+}
+
 function rankCandidates(candidates: Candidate[]): RankedCandidate[] {
   return [...candidates]
     .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name))
     .map((candidate, index) => ({ ...candidate, rank: index + 1 }));
-}
-
-function loadCandidates() {
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      return defaultCandidates;
-    }
-    const parsed = JSON.parse(stored) as Candidate[];
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultCandidates;
-  } catch {
-    return defaultCandidates;
-  }
-}
-
-function createId(name: string) {
-  const base = name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  return `${base || "contender"}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
 function clampScore(score: number) {
@@ -834,6 +930,10 @@ function clampScore(score: number) {
     return 0;
   }
   return Math.min(80, Math.max(0, Math.round(score)));
+}
+
+function readError(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 createRoot(document.getElementById("root")!).render(

@@ -217,7 +217,8 @@ button:disabled {
 
 .feature-panel,
 .rankings,
-.admin-panel {
+.admin-panel,
+.account-panel {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: rgba(255, 248, 251, 0.76);
@@ -225,8 +226,13 @@ button:disabled {
 }
 
 .feature-panel,
-.admin-panel {
+.admin-panel,
+.account-panel {
   padding: clamp(16px, 2.4vw, 22px);
+}
+
+.account-panel {
+  margin-bottom: 16px;
 }
 
 .rankings {
@@ -341,7 +347,9 @@ button:disabled {
 .control-strip select,
 .candidate-form input,
 .candidate-form select,
-.candidate-form textarea {
+.candidate-form textarea,
+.auth-form input,
+.password-form input {
   width: 100%;
   border: 1px solid var(--line);
   outline: 0;
@@ -438,6 +446,8 @@ button:disabled {
 .ranking-list,
 .admin-list,
 .candidate-form,
+.auth-form,
+.password-form,
 .boost-options {
   display: grid;
   gap: 10px;
@@ -607,7 +617,9 @@ button:disabled {
   white-space: nowrap;
 }
 
-.candidate-form label {
+.candidate-form label,
+.auth-form label,
+.password-form label {
   display: grid;
   gap: 7px;
   color: var(--muted);
@@ -617,12 +629,62 @@ button:disabled {
 
 .candidate-form input,
 .candidate-form select,
-.candidate-form textarea {
+.candidate-form textarea,
+.auth-form input,
+.password-form input {
   min-height: 42px;
   border-radius: var(--radius);
   padding: 0 12px;
   font-size: 15px;
   font-weight: 500;
+}
+
+.account-summary {
+  display: grid;
+  gap: 14px;
+}
+
+.account-summary p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-summary h2 {
+  margin: 2px 0 0;
+  color: var(--ink);
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1;
+}
+
+.account-summary span {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.password-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--red-deep);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .candidate-form textarea {
@@ -874,6 +936,10 @@ button:disabled {
 
   .row-actions {
     justify-content: flex-start;
+  }
+
+  .password-form {
+    grid-template-columns: 1fr;
   }
 }
 
