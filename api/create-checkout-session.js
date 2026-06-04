@@ -3,7 +3,7 @@ import { getBoostPackage, getRequiredEnv } from "./_payment-config.js";
 import { getSupabaseAdmin } from "./_supabase.js";
 
 const stripe = new Stripe(getRequiredEnv("STRIPE_SECRET_KEY"), {
-  apiVersion: "2026-02-25.clover"
+  apiVersion: "2026-05-27.dahlia"
 });
 
 export default async function handler(request, response) {
@@ -23,7 +23,6 @@ export default async function handler(request, response) {
     const origin = getAppOrigin(request);
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_collection: "if_required",
       line_items: [
         {
           price_data: {

@@ -3,7 +3,7 @@ import { getRequiredEnv } from "./_payment-config.js";
 import { getSupabaseAdmin } from "./_supabase.js";
 
 const stripe = new Stripe(getRequiredEnv("STRIPE_SECRET_KEY"), {
-  apiVersion: "2026-02-25.clover"
+  apiVersion: "2026-05-27.dahlia"
 });
 
 export const config = {
