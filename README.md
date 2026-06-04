@@ -40,6 +40,11 @@ Fill in:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `PUBLIC_APP_URL`
 
+The server also accepts Vercel/Supabase integration aliases:
+
+- `SUPABASE_PUBLICSUPABASE_URL` instead of `SUPABASE_URL`
+- `SUPABASE_SECRET_KEY` instead of `SUPABASE_SERVICE_ROLE_KEY`
+
 Run the SQL in `supabase/schema.sql` inside the Supabase SQL editor.
 
 For local payment testing, use Vercel dev so `/api/*` functions are available:
