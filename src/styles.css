@@ -377,6 +377,26 @@ button:disabled {
   font-weight: 900;
 }
 
+.payment-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(199, 8, 45, 0.18);
+  border-radius: var(--radius);
+  background: rgba(255, 225, 216, 0.72);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.payment-notice svg {
+  flex: 0 0 auto;
+  color: var(--red);
+}
+
 .boost-result span {
   overflow-wrap: anywhere;
 }

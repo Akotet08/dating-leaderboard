@@ -190,8 +190,26 @@ function App() {
   const [boostOpen, setBoostOpen] = React.useState(false);
   const [selectedBoost, setSelectedBoost] = React.useState<Boost>(boosts[1]);
   const [boosted, setBoosted] = React.useState(false);
+  const [checkoutLoading, setCheckoutLoading] = React.useState(false);
+  const [paymentNotice, setPaymentNotice] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
   const [tier, setTier] = React.useState<"All" | Tier>("All");
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+
+    if (payment === "success") {
+      setBoosted(true);
+      setPaymentNotice("Payment confirmed. Boost applied locally while the webhook records it.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
+    if (payment === "cancelled") {
+      setPaymentNotice("Checkout cancelled. No boost was applied.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   React.useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(candidates));
@@ -217,9 +235,40 @@ function App() {
       ? 0
       : Math.round(candidates.reduce((sum, candidate) => sum + candidate.score, 0) / candidates.length);
 
-  function handleContinue() {
-    setBoosted(true);
-    setBoostOpen(false);
+  async function handleContinue() {
+    if (!user) {
+      return;
+    }
+
+    setCheckoutLoading(true);
+    setPaymentNotice(null);
+
+    try {
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          boostId: selectedBoost.id,
+          candidateId: user.id,
+          candidateName: user.name
+        })
+      });
+
+      const payload = (await response.json()) as { url?: string; error?: string };
+
+      if (!response.ok || !payload.url) {
+        throw new Error(payload.error ?? "Checkout failed");
+      }
+
+      window.location.assign(payload.url);
+    } catch (error) {
+      setPaymentNotice("Checkout is not configured yet. Add Stripe and Supabase env vars, then try again.");
+      console.error(error);
+    } finally {
+      setCheckoutLoading(false);
+    }
   }
 
   function handleResetBoost() {
@@ -303,6 +352,7 @@ function App() {
           onTierChange={setTier}
           onBoost={() => setBoostOpen(true)}
           onResetBoost={handleResetBoost}
+          paymentNotice={paymentNotice}
         />
       ) : (
         <AdminView
@@ -318,6 +368,7 @@ function App() {
           boosts={boosts}
           selectedBoost={selectedBoost}
           userRank={user.rank}
+          loading={checkoutLoading}
           onSelect={setSelectedBoost}
           onClose={() => setBoostOpen(false)}
           onContinue={handleContinue}
@@ -339,7 +390,8 @@ function LeaderboardView({
   onQueryChange,
   onTierChange,
   onBoost,
-  onResetBoost
+  onResetBoost,
+  paymentNotice
 }: {
   candidates: RankedCandidate[];
   podiumCandidates: RankedCandidate[];
@@ -353,6 +405,7 @@ function LeaderboardView({
   onTierChange: (tier: "All" | Tier) => void;
   onBoost: () => void;
   onResetBoost: () => void;
+  paymentNotice: string | null;
 }) {
   return (
     <div className="content-grid">
@@ -375,6 +428,12 @@ function LeaderboardView({
               <RotateCcw size={16} />
               Reset
             </button>
+          </section>
+        ) : null}
+        {paymentNotice ? (
+          <section className="payment-notice" aria-live="polite">
+            <BadgeDollarSign size={18} />
+            <span>{paymentNotice}</span>
           </section>
         ) : null}
       </section>
@@ -684,6 +743,7 @@ function BoostSheet({
   boosts,
   selectedBoost,
   userRank,
+  loading,
   onSelect,
   onClose,
   onContinue
@@ -691,6 +751,7 @@ function BoostSheet({
   boosts: Boost[];
   selectedBoost: Boost;
   userRank: number;
+  loading: boolean;
   onSelect: (boost: Boost) => void;
   onClose: () => void;
   onContinue: () => void;
@@ -732,8 +793,8 @@ function BoostSheet({
             );
           })}
         </div>
-        <button className="continue-button" onClick={onContinue}>
-          Continue - ${selectedBoost.price.toFixed(2)}
+        <button className="continue-button" onClick={onContinue} disabled={loading}>
+          {loading ? "Starting checkout..." : `Continue - $${selectedBoost.price.toFixed(2)}`}
         </button>
       </section>
     </div>
